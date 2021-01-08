@@ -1,9 +1,9 @@
 module Spec exposing (suite)
 
 import Csv.Decode as Decode
-import Expect exposing (Expectation)
-import Fuzz exposing (Fuzzer, int, list, string)
-import Test exposing (..)
+import Expect
+import Result
+import Test exposing (Test, describe, test)
 
 
 suite : Test
@@ -16,40 +16,49 @@ suite =
 andThenSpec : List Test
 andThenSpec =
     let
-        decoder =
+        idResult : Int -> Decode.Decoder a Int
+        idResult id =
+            if id > 0 then
+                Decode.succeed id
+
+            else
+                Decode.fail "id must be greater than zero"
+
+        idDecoder : Decode.Decoder (Int -> Int) Int
+        idDecoder =
             Decode.assertField "site" "blog"
-                |> Decode.andMap (Decode.field "id" (String.toInt >> Ok))
-                |> Decode.andThen
-                    (\maybeInt ->
-                        case maybeInt of
-                            Just id ->
-                                if id > 0 then
-                                    Decode.succeed (Just id)
-
-                                else
-                                    Decode.fail "id must be greater than zero"
-
-                            Nothing ->
-                                Decode.fail "id must be an int"
-                    )
+                |> Decode.andMap (Decode.field "id" (String.toInt >> Result.fromMaybe "id must be an int"))
+                |> Decode.andThen idResult
     in
     [ test "succeeds" <|
         \() ->
             { headers = [ "site", "id" ]
             , records = [ [ "blog", "1" ] ]
             }
-                |> Decode.decodeCsv decoder
-                |> Expect.equal (Ok [ Just 1 ])
-    , test "fails" <|
+                |> Decode.decodeCsv idDecoder
+                |> Expect.equal (Ok [ 1 ])
+    , test "fails on range out-of-bounds" <|
         \() ->
             { headers = [ "site", "id" ]
             , records = [ [ "blog", "-2" ] ]
             }
-                |> Decode.decodeCsv decoder
+                |> Decode.decodeCsv idDecoder
                 |> Expect.equal
                     (Err
                         (Decode.DecodeErrors
                             [ ( 0, "id must be greater than zero" ) ]
+                        )
+                    )
+    , test "fails on not an int error without changing incoming error" <|
+        \() ->
+            { headers = [ "site", "id" ]
+            , records = [ [ "blog", "zesty" ] ]
+            }
+                |> Decode.decodeCsv idDecoder
+                |> Expect.equal
+                    (Err
+                        (Decode.DecodeErrors
+                            [ ( 0, "id must be an int" ) ]
                         )
                     )
     ]
