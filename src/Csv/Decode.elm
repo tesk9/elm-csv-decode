@@ -299,26 +299,33 @@ andMap (Decoder decodeAfter) (Decoder decodeBefore) =
 
 {-| Combine multiple fields together in a way that may fail.
 
-    decodeCsv
-        (assertField "site" "blog"
-            |> andMap (field "id" String.toInt)
-            |> andThen
-                (\id ->
-                    if id > 0 then
-                        succeed id
-                    else
-                        fail "id must be greater than zero"
-                )
-        )
-        data
+    idResult : Int -> Decoder a Int
+    idResult id =
+        if id > 0 then
+            succeed id
+
+        else
+            fail "id must be greater than zero"
+
+    idDecoder : Decoder (Int -> Int) Int
+    idDecoder =
+        assertField "site" "blog"
+            |> andMap (field "id" (String.toInt >> Result.fromMaybe "id must be an int"))
+            |> andThen idResult
+
+    decodeCsv idDecoder data
 
     -- { headers = [ "site", "id" ]
-    -- , records = [["blog","35"]]
+    -- , records = [[ "blog", "35" ]]
     -- }   ==>  Ok [35]
 
     -- { headers = [ "site", "id" ]
-    -- , records = [["blog","-2"]]
-    -- }   ==>  Err "id must be greater than zero"
+    -- , records = [[ "blog", "-2" ]]
+    -- }   ==>  Err (Decode.DecodeErrors [ ( 0, "id must be greater than zero" ) ])
+
+    -- { headers = [ "site", "id" ]
+    -- , records = [[ "blog", "not a number" ]]
+    -- }   ==>  Err (Decode.DecodeErrors [ ( 0, "id must be an int" ) ])
 
 -}
 andThen : (b -> Decoder a c) -> Decoder a b -> Decoder a c
