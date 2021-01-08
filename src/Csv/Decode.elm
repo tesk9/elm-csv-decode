@@ -4,6 +4,7 @@ module Csv.Decode exposing
     , next, field, assertNext, assertField, maybe
     , andMap, oneOf, map
     , Errors(..)
+    , andThen, fail, succeed
     )
 
 {-|
@@ -294,6 +295,58 @@ andMap (Decoder decodeAfter) (Decoder decodeBefore) =
     Decoder <|
         \state ->
             Result.andThen decodeAfter (decodeBefore state)
+
+
+{-| Combine multiple fields together in a way that may fail.
+
+    decodeCsv
+        (assertField "site" "blog"
+            |> andMap (field "id" String.toInt)
+            |> andThen
+                (\id ->
+                    if id > 0 then
+                        succeed id
+                    else
+                        fail "id must be greater than zero"
+                )
+        )
+        data
+
+    -- { headers = [ "site", "id" ]
+    -- , records = [["blog","35"]]
+    -- }   ==>  Ok [35]
+
+    -- { headers = [ "site", "id" ]
+    -- , records = [["blog","-2"]]
+    -- }   ==>  Err "id must be greater than zero"
+
+-}
+andThen : (b -> Decoder a c) -> Decoder a b -> Decoder a c
+andThen f (Decoder decodeBefore) =
+    Decoder <|
+        \state ->
+            case decodeBefore state of
+                Err err ->
+                    Err err
+
+                Ok before ->
+                    let
+                        (Decoder applied) =
+                            (mapHelp f before).value
+                    in
+                    applied state
+
+
+{-| -}
+succeed : b -> Decoder a b
+succeed value =
+    Decoder (\state -> Ok (mapHelp (\_ -> value) state))
+
+
+{-| -}
+fail : String -> Decoder a b
+fail err =
+    Decoder (\_ -> Err err)
 
 
 {-| Try a bunch of different decoders, using the first one that succeeds.
