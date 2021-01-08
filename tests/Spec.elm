@@ -33,7 +33,14 @@ andThenSpec =
                                 Decode.fail "id must be an int"
                     )
     in
-    [ test "fails" <|
+    [ test "succeeds" <|
+        \() ->
+            { headers = [ "site", "id" ]
+            , records = [ [ "blog", "1" ] ]
+            }
+                |> Decode.decodeCsv decoder
+                |> Expect.equal (Ok [ Just 1 ])
+    , test "fails" <|
         \() ->
             { headers = [ "site", "id" ]
             , records = [ [ "blog", "-2" ] ]
