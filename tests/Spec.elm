@@ -75,20 +75,22 @@ andThenSpec =
                                     Decode.fail "id must be greater than zero"
 
                                 else
-                                    Decode.succeed ( site, idStr )
+                                    Decode.succeed ( site, id )
 
                             Nothing ->
                                 Decode.fail "id must be an int"
 
+                decoder : Decode.Decoder (( String, Int ) -> ( String, Int )) ( String, Int )
                 decoder =
                     Decode.field "site" Ok
                         |> Decode.andMap (Decode.field "id" Ok)
                         |> Decode.map (\site id -> ( site, id ))
                         |> Decode.andThen validateFields
+                        |> Decode.map identity
             in
             { headers = [ "site", "id" ]
             , records = [ [ "blog", "1" ], [ "about", "2" ] ]
             }
                 |> Decode.decodeCsv decoder
-                |> Expect.equal (Ok [ ( "blog", "1" ), ( "about", "2" ) ])
+                |> Expect.equal (Ok [ ( "blog", 1 ), ( "about", 2 ) ])
     ]
