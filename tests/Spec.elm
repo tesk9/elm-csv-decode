@@ -61,4 +61,34 @@ andThenSpec =
                             [ ( 0, "id must be an int" ) ]
                         )
                     )
+    , test "combines values at multiple headers" <|
+        \() ->
+            let
+                validateFields ( site, idStr ) =
+                    if String.trim site == "" then
+                        Decode.fail "site cannot be blank"
+
+                    else
+                        case String.toInt idStr of
+                            Just id ->
+                                if id < 0 then
+                                    Decode.fail "id must be greater than zero"
+
+                                else
+                                    Decode.succeed ( site, idStr )
+
+                            Nothing ->
+                                Decode.fail "id must be an int"
+
+                decoder =
+                    Decode.field "site" Ok
+                        |> Decode.andMap (Decode.field "id" Ok)
+                        |> Decode.map (\site id -> ( site, id ))
+                        |> Decode.andThen validateFields
+            in
+            { headers = [ "site", "id" ]
+            , records = [ [ "blog", "1" ], [ "about", "2" ] ]
+            }
+                |> Decode.decodeCsv decoder
+                |> Expect.equal (Ok [ ( "blog", "1" ), ( "about", "2" ) ])
     ]
